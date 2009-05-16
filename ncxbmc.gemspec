@@ -13,5 +13,6 @@ Gem::Specification.new do |s|
   s.has_rdoc = false 
   s.executables = ['ncxbmc.rb']
   s.default_executable = 'ncxbmc.rb'
+  s.add_dependency('ncurses', '>= 0.9.1')
   s.add_dependency('ruby-xbmc', '>= 0.1')
 end 
