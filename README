@@ -1,0 +1,14 @@
+ncXBMC
+==================
+
+ncXBMC is a remote XBMC client, which aims to provide a full control of 
+the music player over a local network.
+
+It can be used to browse library, manage playlist, and control playback.
+
+The interface as been greatly inspired by ncmpc (http://hem.bredband.net/kaw/ncmpc/), 
+a curses client for the Music Player Daemon (MPD) (I'm a fan).
+
+
+Usage: ncxbmc.rb [options] hostname
+
