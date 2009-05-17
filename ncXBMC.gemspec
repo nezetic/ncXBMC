@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name = %q{ncXBMC}
-  s.version = '0.2.1'
-  s.date = %q{2009-05-16}
+  s.version = '0.2.2'
+  s.date = %q{2009-05-17}
   s.authors = ["Cedric TESSIER"]
   s.email = "nezetic at gmail d o t com"
   s.summary = %q{ncXBMC is a remote XBMC client, with an ncurses interface}
@@ -14,6 +14,6 @@ Gem::Specification.new do |s|
   s.executables = ['ncxbmc.rb']
   s.default_executable = 'ncxbmc.rb'
   s.add_dependency('ncurses', '>= 0.9')
-  s.add_dependency('ruby-xbmc', '>= 0.1')
+  s.add_dependency('nezetic-ruby-xbmc', '>= 0.1')
 end 
 
