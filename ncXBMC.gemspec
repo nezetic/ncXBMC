@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = %q{ncXBMC}
-  s.version = '0.2'
+  s.version = '0.2.1'
   s.date = %q{2009-05-16}
   s.authors = ["Cedric TESSIER"]
   s.email = "nezetic at gmail d o t com"
