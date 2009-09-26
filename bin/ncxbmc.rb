@@ -8,7 +8,7 @@
     
     It can be used to browse library, manage playlist, and control playback.
     
-    The interface as been greatly inspired by ncmpc (http://hem.bredband.net/kaw/ncmpc/), 
+    The interface has been greatly inspired by ncmpc (http://hem.bredband.net/kaw/ncmpc/), 
     a curses client for the Music Player Daemon (MPD) (I'm a fan).
     
     
