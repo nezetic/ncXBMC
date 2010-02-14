@@ -14,6 +14,6 @@ Gem::Specification.new do |s|
   s.executables = ['ncxbmc.rb']
   s.default_executable = 'ncxbmc.rb'
   s.add_dependency('ncurses', '>= 0.9')
-  s.add_dependency('nezetic-ruby-xbmc', '>= 0.1.2')
+  s.add_dependency('ruby-xbmc', '>= 0.1.2')
 end 
 
