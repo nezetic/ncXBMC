@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name = %q{ncXBMC}
-  s.version = '0.2.2'
-  s.date = %q{2009-05-17}
+  s.version = '0.3'
+  s.date = %q{2010-02-15}
   s.authors = ["Cedric TESSIER"]
   s.email = "nezetic at gmail d o t com"
   s.summary = %q{ncXBMC is a remote XBMC client, with an ncurses interface}

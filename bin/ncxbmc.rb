@@ -42,7 +42,8 @@ require 'ncurses'
 require 'ruby-xbmc'
 
 NCXMBC_DEFAULTPORT="8080"
-NCXBMC_VERSION=0.2
+NCXBMC_VERSION=0.3
+
 
 module Interface
     KEY_TAB = 9
@@ -59,11 +60,14 @@ module Interface
     KEY_h = 104
     KEY_m = 109
     KEY_p = 112
+    KEY_s = 115
     KEY_RETURN = 127
 
     class NcurseInterface
         REFRESH_DELAY=1 # seconds
         KEY_ESC=27
+    
+        $interface_error = nil
 
         def initialize(xbmc)
             @stdscr = Ncurses.initscr
@@ -104,36 +108,42 @@ module Interface
         end
 
         def UpdateCurrentWin
+            @wins[@currentwin].autorefresh
             @wins[@currentwin].update
         end
 
         def run
-            self.drawCurrentWin
-            self.refresh
+            begin
+                self.drawCurrentWin
+                self.refresh
 
-            key=0
-            timespent=0
-            while key!=KEY_ESC
-                key=@stdscr.getch
+                key=0
+                timespent=0
+                while key!=KEY_ESC
+                    key=@stdscr.getch
 
-                if(key == KEY_TAB) # Tabs Cycling
-                    @currentwin += 1
-                    @currentwin = 0 if(@currentwin > (@wins.length - 1))
+                    if(key == KEY_TAB) # Tabs Cycling
+                        @currentwin += 1
+                        @currentwin = 0 if(@currentwin > (@wins.length - 1))
 
-                    self.drawCurrentWin
-                    self.refresh
-                    next 
+                        self.drawCurrentWin
+                        self.refresh
+                        next 
+                    end
+
+                    @wins[@currentwin].handleKey(key) if key != -1
+
+                    sleep(0.01)
+                    timespent += 0.01
+
+                    if(timespent >= REFRESH_DELAY)
+                        timespent = 0
+                        self.UpdateCurrentWin
+                    end
                 end
-
-                @wins[@currentwin].handleKey(key) if key != -1
-
-                sleep(0.01)
-                timespent += 0.01
-
-                if(timespent >= REFRESH_DELAY)
-                    timespent = 0
-                    self.UpdateCurrentWin
-                end
+            rescue Interrupt
+            rescue Exception => exc
+                $interface_error = exc
             end
         end
 
@@ -160,6 +170,19 @@ module Interface
             Ncurses.curs_set(1)
 
             Ncurses.endwin
+
+            if not $interface_error.nil?
+                case $interface_error
+                when SocketError, Errno::ETIMEDOUT then
+                    puts "\nConnection lost !\n"
+                else
+                    puts "\nFATAL ERROR in ncXBMC v%g !" % NCXBMC_VERSION
+                    puts $interface_error.class.to_s + ": " +  $interface_error.to_s
+                    puts "Callstack:"
+                    $interface_error.backtrace.each {|line| puts "\t#{line}"}
+                    puts ""
+                end
+            end
         end
     end
 
@@ -181,14 +204,18 @@ module Interface
             @selected = 0
             @scroll   = 0
 
+            @rheader  = false
+            @rmain    = false
+            @rfooter  = false
+
+            @autorefresh_header = false
+            @autorefresh_main   = false
+            @autorefresh_footer = false
+
+            @defaultKeys = true
+
             @helpMSGCommon = "TAB     switch between windows\nESC     quit ncXBMC\n\n"
             @helpMSG = ""
-        end
-
-        def refresh
-            @header.refresh
-            @main.refresh
-            @footer.refresh
         end
 
         def draw
@@ -197,18 +224,45 @@ module Interface
             self.drawFooter
         end
 
-        def update(rheader=false, rmain=false, rfooter=false)
-            if(rheader)
-                drawHeader
+        def autorefresh
+            self.updateHeader if @autorefresh_header
+            self.updateMain   if @autorefresh_main
+            self.updateFooter if @autorefresh_footer
+        end
+
+        def refresh
+            @header.refresh
+            @main.refresh
+            @footer.refresh
+        end
+
+        def updateHeader
+            @rheader = true
+        end
+
+        def updateMain
+            @rmain   = true
+        end
+        
+        def updateFooter
+            @rfooter = true
+        end
+
+        def update
+            if(@rheader)
+                self.drawHeader
                 @header.refresh
+                @rheader = false
             end
-            if(rmain)
+            if(@rmain)
                 self.drawMain
                 @main.refresh
+                @rmain = false
             end
-            if(rfooter)
+            if(@rfooter)
                 self.drawFooter
                 @footer.refresh
+                @rfooter = false
             end
         end
 
@@ -216,9 +270,11 @@ module Interface
             #Ncurses.mvwaddstr(@main, 20, 1, "KeyCode: " + key.to_s)
             #@main.refresh
 
-            case key
-            when KEY_h then
-                self.showHelp
+            if (@defaultKeys)
+                case key
+                when KEY_h then
+                    self.showHelp
+                end
             end
         end
 
@@ -277,6 +333,7 @@ module Interface
         def initialize(pscreen, xbmc)
             super
             @title = "Playlist"
+            @autorefresh_footer = true
 
             @forcesel = 0
             @fastRefresh = false
@@ -349,11 +406,11 @@ module Interface
             end
         end
 
-        def update(rheader=false, rmain=false, rfooter=true)
+        def update
             super
 
             if(@playing) # new song playing, refresh playlist
-                if(not rmain and (@current_song["Changed"] == "True"))
+                if(not @rmain and (@current_song["Changed"] == "True"))
                     self.drawMain
                     @main.refresh
                 end
@@ -363,42 +420,38 @@ module Interface
         def handleKey(key)
             super
 
-            refresh_header = false
-            refresh_main = false
-            refresh_footer = false
-
             case key
             when KEY_LEFT then 
                 @xbmc.SetVolume(@xbmc.GetVolume.to_i - 1)
-                refresh_header = true
+                self.updateHeader
             when KEY_RIGHT then 
                 @xbmc.SetVolume(@xbmc.GetVolume.to_i + 1)
-                refresh_header = true
+                self.updateHeader
             when KEY_DOWN then
                 @selected += 1 if @selected < (@playlist.length - 1)
                 @fastRefresh = true
-                refresh_main = true
+                self.updateMain
             when KEY_UP then
                 @selected -= 1 if @selected > 0
                 @fastRefresh = true
-                refresh_main = true
+                self.updateMain
             when KEY_ENTER then
                 if(@xbmc.GetPlaySpeed.to_i != 1)
                     @xbmc.SetPlaySpeed(1)
                 else
                     @xbmc.SetPlaylistSong(@selected)
                 end
-                refresh_main = true
+                self.updateMain
             when KEY_d then
                 @xbmc.RemoveFromPlaylist(@selected)
                 @selected -= 1 if @selected >= (@playlist.length - 1)
                 @forcesel = @selected
-                refresh_main = true
+                self.updateMain
             when KEY_c then
                 @xbmc.Stop
                 @xbmc.ClearPlayList(XBMC::MUSIC_PLAYLIST)
                 @selected = 0
-                refresh_main = true
+                self.updateMain
             when KEY_f then
                 speed = @xbmc.GetPlaySpeed.to_i
                 newspeed = speed < 0 ? speed / 2 : speed * 2
@@ -411,13 +464,13 @@ module Interface
                 @xbmc.SetPlaySpeed(newspeed) if(speed > -32)
             when KEY_m then
                 @xbmc.Mute
-                refresh_header = true
+                self.updateHeader
             when KEY_p then
                 @xbmc.Pause
-                refresh_footer = true
+                self.updateFooter
             end
 
-            self.update(refresh_header, refresh_main, refresh_footer)
+            self.update
         end
 
         def showHelp
@@ -465,8 +518,10 @@ module Interface
             @deepth = 0
             @lastdeepth = -1
             @currentdir = nil
-            @history = []
+            @history  = []
 
+            @search   = false
+            @searched = ""
         end
 
         def drawMain
@@ -496,31 +551,69 @@ module Interface
         def drawFooter
             super
 
-            histline =  ""
-            @history.reverse.each {|old|
-                histline += " > " + old[:currentname] 
-            }
+            if (@search)
+                Ncurses.mvwaddstr(@footer, 1, 1, "/ " + @searched)
+            else
+                histline =  ""
+                @history.reverse.each {|old|
+                    histline += " > " + old[:currentname] 
+                }
 
-            Ncurses.mvwaddstr(@footer, 1, 1, histline)
+                Ncurses.mvwaddstr(@footer, 1, 1, histline)
 
-            nitems_label = @list.length.to_s + " items"
-            @footer.mvwaddstr(1, @maxx - nitems_label.length - 1, nitems_label)
+                nitems_label = @list.length.to_s + " items"
+                @footer.mvwaddstr(1, @maxx - nitems_label.length - 1, nitems_label)
+            end
         end
 
-        def handleKey(key)
-            super
+        def searchEntry
+            if @searched.size > 2
+                idx = 0
+                @list.each { |entry|
+                    if entry["name"].downcase.include?(@searched.downcase)
+                        @selected = idx
+                        @scroll   = idx
+                        return true
+                    end
+                    idx += 1
+                }
+            end
+            return false
+        end
 
-            refresh_header = false
-            refresh_main = false
-            refresh_footer = false
+        def handleKeySearch(key)
+
+            case key
+            when KEY_ENTER then
+                @search = false
+                @searched = ""
+                @defaultKeys = true
+                self.updateFooter
+            when KEY_RETURN then
+                @searched.chop!()
+                self.updateFooter
+            else
+                begin
+                    @searched += key.chr 
+                    self.updateFooter
+                rescue
+                    return
+                end
+                self.updateMain if self.searchEntry
+            end
+
+            self.update
+        end
+
+        def handleKeyMain(key)
 
             case key
             when KEY_DOWN then
                 @selected += 1 if @selected < (@list.length - 1)
-                refresh_main=true
+                self.updateMain
             when KEY_UP then
                 @selected -= 1 if @selected > 0
-                refresh_main=true
+                self.updateMain
             when KEY_ENTER then
                 if @list[@selected]["type"].to_i == XBMC::TYPE_DIRECTORY
                     @history.insert(0, {:currentdir=>@currentdir, :selected=>@selected, :scroll=>@scroll, :currentname=>@list[@selected]["name"]})
@@ -529,8 +622,8 @@ module Interface
                     @scroll = 0
                     @deepth += 1
                 end
-                refresh_main = true
-                refresh_footer = true
+                self.updateMain
+                self.updateFooter
             when KEY_RETURN then
                 return if(@history.length < 1)
                 oldentry = @history.shift
@@ -538,8 +631,8 @@ module Interface
                 @selected = oldentry[:selected]
                 @scroll = oldentry[:scroll]
                 @deepth -= 1
-                refresh_main = true
-                refresh_footer = true
+                self.updateMain
+                self.updateFooter
             when KEY_SPACE then
                 @xbmc.AddToPlayList(@list[@selected]["path"], XBMC::MUSIC_PLAYLIST, "[music]")
                 @xbmc.SetCurrentPlaylist(XBMC::MUSIC_PLAYLIST)
@@ -547,9 +640,23 @@ module Interface
             when KEY_c then
                 @xbmc.Stop
                 @xbmc.ClearPlayList(XBMC::MUSIC_PLAYLIST)
+            when KEY_s then
+                @search = true
+                @defaultKeys = false
+                self.updateFooter
             end
 
-            self.update(refresh_header, refresh_main, refresh_footer)
+            self.update
+        end
+
+        def handleKey(key)
+            super
+
+            if (@search)
+                self.handleKeySearch(key)
+            else
+                self.handleKeyMain(key)
+            end
         end
 
         def showHelp
@@ -558,7 +665,8 @@ module Interface
             @helpMSG += "ENTER   browse selected directory\n"
             @helpMSG += "RETURN  return into previous directory\n"
             @helpMSG += "SPACE   add selected directory/file to playlist\n\n"
-            @helpMSG += "c       clear current playlist"
+            @helpMSG += "c       clear current playlist\n"
+            @helpMSG += "s       search an entry in playlist"
             super
         end
     end
@@ -599,7 +707,7 @@ if(options[:version])
     puts "ncXBMC version " + NCXBMC_VERSION.to_s
     puts <<EOF
     
-Copyright (C) 2009 Cedric TESSIER
+Copyright (C) 2009-2010 Cedric TESSIER
     
 This program may be redistributed under
 the terms of the GPL v2 License
@@ -628,5 +736,6 @@ rescue SocketError => e
 end
 
 interface = Interface::NcurseInterface.new(xbmc)
+
 interface.run
 
