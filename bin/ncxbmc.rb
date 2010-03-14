@@ -685,7 +685,7 @@ inputopts = OptionParser.new do |opts|
         options[:version] = v
     end
     opts.on("-p", "--port [NUMBER]", Integer,"Port used (default %d)" % NCXMBC_DEFAULTPORT) do |port|
-        options[:port] = port
+        options[:port] = port.to_s
     end
     opts.on("-U", "--user [NAME]", String, "Username used for authentication") do |name|
         options[:user] = name
